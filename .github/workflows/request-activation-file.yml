@@ -1,13 +1,18 @@
 # TJ Racing 3D — request a Unity manual activation file (.alf), one-time setup step
 #
-# WHY THIS SHAPE: the old game-ci/unity-request-activation-file action is
-# DISCONTINUED ("This action is no longer supported" — run #2, 19 Nov 2026),
-# and the current game.ci docs only document Unity Hub activation on a local
-# machine. This workflow instead runs the Unity Editor itself with
-# -createManualActivationFile, which writes Unity_v<version>.alf into the
-# workspace root. The .alf is then activated at
-# https://license.unity3d.com/manual (signed in to the Unity account) to get
-# the .ulf licence file, which becomes the UNITY_LICENSE repo secret.
+# HISTORY (why this shape — 19 Nov 2026):
+# - game-ci/unity-request-activation-file is DISCONTINUED (v2 refuses to run).
+# - game-ci/unity-builder@v4 refuses to start WITHOUT a UNITY_LICENSE or
+#   UNITY_SERIAL secret, so -createManualActivationFile can never run through
+#   it (chicken-and-egg: the builder needs the licence to make the file that
+#   creates the licence). Run #3 proved this.
+# - This workflow therefore runs the job INSIDE game-ci's own Unity Editor
+#   Docker image (unityci/editor:ubuntu-2022.3.62f2-base-3.2.2 — tag verified
+#   on Docker Hub, 19 Nov 2026) and invokes the Editor binary directly with
+#   -createManualActivationFile. No licence is needed to CREATE the file.
+# - The .alf is then activated at https://license.unity3d.com/manual (signed
+#   in to the Unity account) to get the .ulf licence file, which becomes the
+#   UNITY_LICENSE repo secret (along with UNITY_EMAIL + UNITY_PASSWORD).
 #
 # Trigger: Actions tab -> "Request Unity activation file" -> Run workflow.
 # No secrets needed — this only generates the .alf file.
@@ -20,7 +25,7 @@ on:
   workflow_dispatch:
     inputs:
       unity_version:
-        description: "Unity version (must stay 2022.3.62f2)"
+        description: "Unity version (the container image tag is the real pin — must stay 2022.3.62f2)"
         required: true
         default: "2022.3.62f2"
 
@@ -28,19 +33,20 @@ jobs:
   request:
     name: Request activation file (.alf)
     runs-on: ubuntu-latest
+    container:
+      image: unityci/editor:ubuntu-2022.3.62f2-base-3.2.2
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Runs the Editor with -createManualActivationFile; Unity writes the
-      # .alf and quits before any build starts. No buildMethod is set on
-      # purpose — the flag short-circuits the run.
+      # The Editor writes Unity_v<version>.alf into the working directory
+      # and quits. `|| true` because the Editor's exit code on this flag is
+      # not contractual — the `ls` proves the file exists, and the upload
+      # step fails loudly if it does not.
       - name: Create manual activation file
-        uses: game-ci/unity-builder@v4
-        with:
-          unityVersion: ${{ inputs.unity_version }}
-          targetPlatform: StandaloneWindows64
-          customParameters: -quit -batchmode -createManualActivationFile
+        run: |
+          /opt/Unity/Editor/Unity -quit -batchmode -createManualActivationFile || true
+          ls -la *.alf
 
       - name: Upload activation file artifact
         uses: actions/upload-artifact@v4
