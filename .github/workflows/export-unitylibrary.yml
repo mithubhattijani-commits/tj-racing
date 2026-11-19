@@ -53,7 +53,7 @@ jobs:
           unityVersion: ${{ inputs.unity_version }}
           targetPlatform: Android
           buildMethod: ProjectExporterBatchmode.ExportProject
-          customParameters: -exportPath ./unityLibraryExport
+          customParameters: -exportPath ./android/unityLibrary
 
       - name: Check export output
         run: |
