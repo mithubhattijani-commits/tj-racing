@@ -12,8 +12,14 @@
 #   the Editor lives in the module images built from the editor Dockerfile).
 #   Run #5 proved it: /opt/unity/editors/ did not exist in the base image.
 #   This workflow therefore uses the `-android` image, which DOES contain the
-#   Editor at /opt/unity/editors/<version>/Editor/Unity (plus Android Build
-#   Support, which the later export needs anyway).
+#   Editor (plus Android Build Support, which the later export needs anyway).
+# - Run #6 (android image) STILL failed: /opt/unity/editors/<version>/ is the
+#   BUILDER-stage path in game-ci/docker's editor Dockerfile — the final
+#   image copies the editor contents into $UNITY_PATH, and the base image
+#   sets UNITY_PATH=/opt/unity. So the real binary is /opt/unity/Editor/Unity
+#   (verified in game-ci/docker, 19 Nov 2026). The image also ships the
+#   `unity-editor` wrapper (/usr/bin/unity-editor) which runs the Editor under
+#   xvfb with -batchmode — that is the entry point used here.
 # - The .alf is then activated at https://license.unity3d.com/manual (signed
 #   in to the Unity account) to get the .ulf licence file, which becomes the
 #   UNITY_LICENSE repo secret (along with UNITY_EMAIL + UNITY_PASSWORD).
@@ -44,16 +50,16 @@ jobs:
         uses: actions/checkout@v4
 
       # The Editor writes Unity_v<version>.alf into the working directory
-      # and quits. The binary lives at /opt/unity/editors/<version>/Editor/Unity
-      # in unityci images (lowercase 'unity', per game-ci/docker's editor
-      # Dockerfile — NOT /opt/Unity/Editor/Unity). `|| true` because the
-      # Editor's exit code on this flag is not contractual — the `ls` proves
-      # the file exists, and the upload step fails loudly if it does not.
+      # and quits. The binary is /opt/unity/Editor/Unity (UNITY_PATH=/opt/unity
+      # in the base image; the /opt/unity/editors/<version>/ path exists only
+      # in the Dockerfile's builder stage, NOT in the final image — run #6
+      # proved that). Use the image's own `unity-editor` wrapper: it runs the
+      # Editor under xvfb with -batchmode. No `|| true` — if the Editor fails,
+      # the step must fail loudly with the Editor's own error in the log.
       - name: Create manual activation file
         run: |
-          UNITY_BIN=$(ls /opt/unity/editors/*/Editor/Unity | head -n 1)
-          echo "Using Unity at: $UNITY_BIN"
-          "$UNITY_BIN" -quit -batchmode -createManualActivationFile || true
+          ls -la /opt/unity/Editor/Unity
+          unity-editor -quit -createManualActivationFile
           ls -la *.alf
 
       - name: Upload activation file artifact
