@@ -1,13 +1,18 @@
-# TJ Racing 3D — request a Unity activation file (.alf), one-time setup step
+# TJ Racing 3D — request a Unity manual activation file (.alf), one-time setup step
+#
+# WHY THIS SHAPE: the old game-ci/unity-request-activation-file action is
+# DISCONTINUED ("This action is no longer supported" — run #2, 19 Nov 2026),
+# and the current game.ci docs only document Unity Hub activation on a local
+# machine. This workflow instead runs the Unity Editor itself with
+# -createManualActivationFile, which writes Unity_v<version>.alf into the
+# workspace root. The .alf is then activated at
+# https://license.unity3d.com/manual (signed in to the Unity account) to get
+# the .ulf licence file, which becomes the UNITY_LICENSE repo secret.
 #
 # Trigger: Actions tab -> "Request Unity activation file" -> Run workflow.
 # No secrets needed — this only generates the .alf file.
 #
 # Output: artifact "activation-file" (14-day retention) containing the .alf.
-# Next step (main agent, via browser): upload the .alf at
-# https://license.unity3d.com/manual while signed in to the Unity account,
-# download the .ulf licence file, and add it as the UNITY_LICENSE repo secret
-# (along with UNITY_EMAIL + UNITY_PASSWORD) — then the Export workflow can run.
 
 name: Request Unity activation file
 
@@ -27,15 +32,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Request activation file
-        id: activation
-        uses: game-ci/unity-request-activation-file@v2
+      # Runs the Editor with -createManualActivationFile; Unity writes the
+      # .alf and quits before any build starts. No buildMethod is set on
+      # purpose — the flag short-circuits the run.
+      - name: Create manual activation file
+        uses: game-ci/unity-builder@v4
         with:
           unityVersion: ${{ inputs.unity_version }}
+          targetPlatform: StandaloneWindows64
+          customParameters: -quit -batchmode -createManualActivationFile
 
       - name: Upload activation file artifact
         uses: actions/upload-artifact@v4
         with:
           name: activation-file
-          path: ${{ steps.activation.outputs.filePath }}
+          path: "*.alf"
           retention-days: 14
