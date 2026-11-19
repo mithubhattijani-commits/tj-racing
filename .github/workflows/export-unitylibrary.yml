@@ -57,13 +57,13 @@ jobs:
 
       - name: Check export output
         run: |
-          ls -la unityLibraryExport
-          test -f unityLibraryExport/build.gradle
-          test -f unityLibraryExport/src/main/AndroidManifest.xml
+          ls -la android/unityLibrary
+          test -f android/unityLibrary/build.gradle
+          test -f android/unityLibrary/src/main/AndroidManifest.xml
 
       - name: Upload unityLibrary artifact
         uses: actions/upload-artifact@v4
         with:
           name: unityLibrary
-          path: unityLibraryExport
+          path: android/unityLibrary
           retention-days: 14
