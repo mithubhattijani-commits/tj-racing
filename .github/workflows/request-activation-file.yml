@@ -6,10 +6,14 @@
 #   UNITY_SERIAL secret, so -createManualActivationFile can never run through
 #   it (chicken-and-egg: the builder needs the licence to make the file that
 #   creates the licence). Run #3 proved this.
-# - This workflow therefore runs the job INSIDE game-ci's own Unity Editor
-#   Docker image (unityci/editor:ubuntu-2022.3.62f2-base-3.2.2 — tag verified
-#   on Docker Hub, 19 Nov 2026) and invokes the Editor binary directly with
-#   -createManualActivationFile. No licence is needed to CREATE the file.
+# - Runs #4/#5: the job runs INSIDE game-ci's Editor Docker image and calls
+#   the Editor binary directly — but the `-base` image tag contains NO Editor
+#   at all (game-ci/docker's base Dockerfile installs only OS dependencies;
+#   the Editor lives in the module images built from the editor Dockerfile).
+#   Run #5 proved it: /opt/unity/editors/ did not exist in the base image.
+#   This workflow therefore uses the `-android` image, which DOES contain the
+#   Editor at /opt/unity/editors/<version>/Editor/Unity (plus Android Build
+#   Support, which the later export needs anyway).
 # - The .alf is then activated at https://license.unity3d.com/manual (signed
 #   in to the Unity account) to get the .ulf licence file, which becomes the
 #   UNITY_LICENSE repo secret (along with UNITY_EMAIL + UNITY_PASSWORD).
@@ -34,7 +38,7 @@ jobs:
     name: Request activation file (.alf)
     runs-on: ubuntu-latest
     container:
-      image: unityci/editor:ubuntu-2022.3.62f2-base-3.2.2
+      image: unityci/editor:ubuntu-2022.3.62f2-android-3.2.2
     steps:
       - name: Checkout
         uses: actions/checkout@v4
