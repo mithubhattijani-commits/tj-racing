@@ -7,6 +7,10 @@
 // rewards). Locked luxury cars show a gold LUXURY tag + progress "340 / 1200".
 // Unlocking itself happens in FLUTTER (it owns the Ad Coin balance); Unity only
 // displays the state Flutter sends via SetUnlockedCars / SetBalances.
+// SPLASH (user order 19 Nov): when the game opens, a full-screen splash shows
+// the user's photo (Assets/Resources/jaani-photo.png, circular, gold ring),
+// "TJ RACING" + "Presented by Jaani", once per session, ~2.5s with a fade,
+// tap anywhere to skip. Title-only if the photo is missing — never a crash.
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -31,6 +35,19 @@ namespace TJRacing
         private GameObject _heroCar;
         private float _heroAngle;
 
+        // Splash (once per session, when the game opens): photo + title +
+        // "Presented by Jaani". Auto-dismisses after SplashHoldSecs with a
+        // fade; tap anywhere skips immediately. Title-only if the photo is
+        // missing — the splash never blocks the menu and never crashes.
+        private GameObject _splashPanel;
+        private CanvasGroup _splashGroup;
+        private float _splashTimer;
+        private bool _splashFading;
+        private static bool _splashShown;
+        private const float SplashHoldSecs = 2.5f;
+        private const float SplashFadeSecs = 0.5f;
+        private const string SplashPhotoPath = "jaani-photo";
+
         void Awake()
         {
             _cars = FlutterBridge.Instance != null
@@ -38,6 +55,7 @@ namespace TJRacing
                 : CarCatalogue.DefaultCars();
             _selectedIndex = 0;
             BuildUI();
+            BuildSplash();
             RefreshCarCard();
         }
 
@@ -65,6 +83,21 @@ namespace TJRacing
             {
                 _heroAngle += Time.deltaTime * 0.35f;
                 _heroCar.transform.rotation = Quaternion.Euler(0f, Mathf.Sin(_heroAngle) * 24f, 0f);
+            }
+
+            // Splash: hold, then fade out. Tap dismisses instantly (DismissSplash).
+            if (_splashPanel != null && _splashPanel.activeSelf)
+            {
+                _splashTimer += Time.deltaTime;
+                if (!_splashFading && _splashTimer >= SplashHoldSecs)
+                {
+                    _splashFading = true;
+                }
+                if (_splashFading)
+                {
+                    _splashGroup.alpha -= Time.deltaTime / SplashFadeSecs;
+                    if (_splashGroup.alpha <= 0f) DismissSplash();
+                }
             }
         }
 
@@ -120,6 +153,112 @@ namespace TJRacing
 
             BuildSettingsPanel();
             BuildHowToPanel();
+        }
+
+        private void BuildSplash()
+        {
+            // Only the first menu load of the session: quitting a race back to
+            // the menu must NOT show the splash again.
+            if (_splashShown) return;
+            _splashShown = true;
+
+            // Built last, so it draws above the menu (and its panels).
+            _splashPanel = new GameObject("SplashPanel");
+            _splashPanel.transform.SetParent(_canvas.transform, false);
+            var rt = _splashPanel.AddComponent<RectTransform>();
+            UIBuilder.Place(rt, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            _splashPanel.AddComponent<Image>().color = new Color(0.03f, 0.03f, 0.13f, 1f);
+            _splashGroup = _splashPanel.AddComponent<CanvasGroup>();
+
+            // Circular photo (gold disc behind = border ring). The photo is
+            // 200x200, so it stays modest (360px) — never blown up full-screen.
+            // If the texture is missing, the splash is title-only: no crash,
+            // no hang, the menu is still reachable.
+            var photo = Resources.Load<Texture2D>(SplashPhotoPath);
+            if (photo != null)
+            {
+                var disc = MakeCircleTexture(256);
+                var discSprite = Sprite.Create(disc, new Rect(0f, 0f, 256f, 256f), new Vector2(0.5f, 0.5f));
+
+                var ring = new GameObject("PhotoRing");
+                ring.transform.SetParent(_splashPanel.transform, false);
+                var ringRt = ring.AddComponent<RectTransform>();
+                UIBuilder.Place(ringRt, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-188, 112), new Vector2(188, 488));
+                var ringImg = ring.AddComponent<Image>();
+                ringImg.sprite = discSprite;
+                ringImg.color = UIBuilder.Gold;
+                ringImg.raycastTarget = false;
+
+                var maskGo = new GameObject("PhotoMask");
+                maskGo.transform.SetParent(_splashPanel.transform, false);
+                var maskRt = maskGo.AddComponent<RectTransform>();
+                UIBuilder.Place(maskRt, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-180, 120), new Vector2(180, 480));
+                var maskImg = maskGo.AddComponent<Image>();
+                maskImg.sprite = discSprite;
+                maskImg.color = Color.white;
+                maskImg.raycastTarget = false;
+                maskGo.AddComponent<Mask>();
+
+                var rawGo = new GameObject("Photo");
+                rawGo.transform.SetParent(maskGo.transform, false);
+                var rawRt = rawGo.AddComponent<RectTransform>();
+                UIBuilder.Place(rawRt, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+                var raw = rawGo.AddComponent<RawImage>();
+                raw.texture = photo;
+                raw.raycastTarget = false;
+            }
+
+            // Title (same white + pink shadow as the menu title) + presenter line.
+            var titleShadow = UIBuilder.Label(_splashPanel.transform, "TitleShadow", "TJ RACING", 110, UIBuilder.Pink, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UIBuilder.Place(titleShadow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-514, -46), new Vector2(526, 114));
+            var title = UIBuilder.Label(_splashPanel.transform, "Title", "TJ RACING", 110, Color.white, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UIBuilder.Place(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-520, -40), new Vector2(520, 120));
+            var by = UIBuilder.Label(_splashPanel.transform, "PresentedBy", "Presented by Jaani", 44, UIBuilder.Gold, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UIBuilder.Place(by.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-520, -120), new Vector2(520, -40));
+            var sub = UIBuilder.Label(_splashPanel.transform, "Subtitle", "3 D   S T R E E T   R A C I N G", 40, UIBuilder.Cyan, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UIBuilder.Place(sub.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-520, -190), new Vector2(520, -120));
+
+            // Invisible full-screen tap catcher, topmost: any tap skips at once.
+            var tapGo = new GameObject("TapToSkip");
+            tapGo.transform.SetParent(_splashPanel.transform, false);
+            var tapRt = tapGo.AddComponent<RectTransform>();
+            UIBuilder.Place(tapRt, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            var tapImg = tapGo.AddComponent<Image>();
+            tapImg.color = new Color(0f, 0f, 0f, 0f);
+            var tapBtn = tapGo.AddComponent<Button>();
+            tapBtn.targetGraphic = tapImg;
+            tapBtn.onClick.AddListener(DismissSplash);
+
+            _splashTimer = 0f;
+            _splashFading = false;
+        }
+
+        /// <summary>White disc (transparent corners, 1px soft edge) used as a circular mask sprite.</summary>
+        private static Texture2D MakeCircleTexture(int size)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+            float r = size * 0.5f;
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = x + 0.5f - r;
+                    float dy = y + 0.5f - r;
+                    float d = Mathf.Sqrt(dx * dx + dy * dy);
+                    float a = Mathf.Clamp01(r - d + 0.5f);
+                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+                }
+            }
+            tex.Apply();
+            return tex;
+        }
+
+        private void DismissSplash()
+        {
+            if (_splashPanel == null) return;
+            _splashPanel.SetActive(false);
+            _splashPanel = null;
         }
 
         private void BuildSettingsPanel()
