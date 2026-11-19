@@ -121,11 +121,11 @@ namespace TJRacing
             UIBuilder.Place(feats.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(-520, -470), new Vector2(520, -410));
 
             // Coins pill (left) + level pill (right).
-            var coinsPanel = UIBuilder.Panel(_canvas.transform, "CoinsPill",
+            var coinsPanel = UIBuilder.MakePanel(_canvas.transform, "CoinsPill",
                 new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(60, -590), new Vector2(500, -500), UIBuilder.Panel);
             _coinsText = UIBuilder.Label(coinsPanel, "CoinsText", "● 0", 40, Color.white, TextAnchor.MiddleCenter, FontStyle.Bold);
             UIBuilder.Place(_coinsText.rectTransform, Vector2.zero, Vector2.one, new Vector2(16, 0), new Vector2(-16, 0));
-            var levelPanel = UIBuilder.Panel(_canvas.transform, "LevelPill",
+            var levelPanel = UIBuilder.MakePanel(_canvas.transform, "LevelPill",
                 new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-500, -590), new Vector2(-60, -500), UIBuilder.Panel);
             _levelText = UIBuilder.Label(levelPanel, "LevelText", "LEVEL 1", 40, Color.white, TextAnchor.MiddleCenter, FontStyle.Bold);
             UIBuilder.Place(_levelText.rectTransform, Vector2.zero, Vector2.one, new Vector2(16, 0), new Vector2(-16, 0));

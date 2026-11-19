@@ -35,7 +35,7 @@ namespace TJRacing
             return canvas;
         }
 
-        public static RectTransform Panel(Transform parent, string name,
+        public static RectTransform MakePanel(Transform parent, string name,
             Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax,
             Color color)
         {

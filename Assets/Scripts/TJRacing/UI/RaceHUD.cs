@@ -92,7 +92,7 @@ namespace TJRacing
             _canvas = UIBuilder.MakeCanvas(gameObject, "RaceHUDCanvas");
 
             // Top row — coins pill (left).
-            var coinsPanel = UIBuilder.Panel(_canvas.transform, "CoinsPill",
+            var coinsPanel = UIBuilder.MakePanel(_canvas.transform, "CoinsPill",
                 new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24, -150), new Vector2(430, -70), UIBuilder.Panel);
             _coinsText = UIBuilder.Label(coinsPanel, "CoinsText", "● 0", 40, Color.white, TextAnchor.MiddleCenter, FontStyle.Bold);
             UIBuilder.Place(_coinsText.rectTransform, Vector2.zero, Vector2.one, new Vector2(16, 0), new Vector2(-16, 0));
@@ -108,7 +108,7 @@ namespace TJRacing
             UIBuilder.Place(pauseBtn.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-130, -170), new Vector2(-24, -70));
 
             // Position card (left, below top row).
-            var posPanel = UIBuilder.Panel(_canvas.transform, "PositionCard",
+            var posPanel = UIBuilder.MakePanel(_canvas.transform, "PositionCard",
                 new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24, -400), new Vector2(300, -240), UIBuilder.Panel);
             _positionText = UIBuilder.Label(posPanel, "PositionText", "6th", 72, UIBuilder.Gold, TextAnchor.MiddleCenter, FontStyle.Bold);
             UIBuilder.Place(_positionText.rectTransform, new Vector2(0f, 0.45f), new Vector2(1f, 1f), Vector2.zero, Vector2.zero);
@@ -126,7 +126,7 @@ namespace TJRacing
             UIBuilder.Place(kmh.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-360, 270), new Vector2(-30, 330));
 
             // Nitro bar bottom-centre.
-            var nitroBg = UIBuilder.Panel(_canvas.transform, "NitroBarBg",
+            var nitroBg = UIBuilder.MakePanel(_canvas.transform, "NitroBarBg",
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(-260, 210), new Vector2(260, 250), UIBuilder.Panel);
             var nitroFillGo = new GameObject("NitroFill");
             nitroFillGo.transform.SetParent(nitroBg, false);

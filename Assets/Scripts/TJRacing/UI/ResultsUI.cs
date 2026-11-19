@@ -27,7 +27,7 @@ namespace TJRacing
         private void BuildUI()
         {
             _canvas = UIBuilder.MakeCanvas(gameObject, "ResultsCanvas");
-            var bg = UIBuilder.Panel(_canvas.transform, "Bg",
+            var bg = UIBuilder.MakePanel(_canvas.transform, "Bg",
                 Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, new Color(0f, 0f, 0f, 0.82f));
             _titleText = UIBuilder.Label(bg, "Title", "", 110, UIBuilder.Gold, TextAnchor.MiddleCenter, FontStyle.Bold);
             UIBuilder.Place(_titleText.rectTransform, new Vector2(0.5f, 0.75f), new Vector2(0.5f, 0.75f), new Vector2(-500, -80), new Vector2(500, 80));
