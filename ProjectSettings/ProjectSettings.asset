@@ -1,0 +1,136 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!129 &1
+PlayerSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 25
+  productGUID: a1b2c3d4e5f60718293a4b5c6d7e8f90
+  AndroidProfiler: 0
+  AndroidFilterTouchesWhenObscured: 0
+  AndroidEnableSustainedPerformanceMode: 0
+  defaultScreenOrientation: 3
+  targetDevice: 2
+  useOnDemandResources: 0
+  accelerometerFrequency: 60
+  companyName: Nigraan TV
+  productName: TJ Racing 3D
+  defaultCursor: {fileID: 0}
+  cursorHotspot: {x: 0, y: 0}
+  m_ShowUnitySplashScreen: 1
+  m_ShowUnitySplashLogo: 1
+  m_SplashScreenBackgroundColor: {r: 0.05, g: 0.05, b: 0.16, a: 1}
+  m_SplashScreenAnimation: 1
+  m_SplashScreenLogoStyle: 1
+  m_SplashScreenDrawMode: 0
+  m_SplashScreenBackground: {fileID: 0}
+  m_SplashScreenLogos: []
+  m_VirtualRealitySplashScreen: {fileID: 0}
+  m_HolographicTrackingLossScreen: {fileID: 0}
+  defaultIcon: {fileID: 0}
+  m_Icon: []
+  m_BuildTargetIcons: []
+  m_BuildTargetBatching: []
+  m_BuildTargetGraphicsAPIs: []
+  m_BuildTargetVRSettings: []
+  openGLRequireES31: 0
+  openGLRequireES31AEP: 0
+  openGLRequireES32: 0
+  m_AndroidBanners: []
+  m_AndroidIcons: []
+  m_AndroidSplashScreen: {fileID: 0}
+  m_AndroidSplashScreenScale: 0
+  androidUseCustomKeystore: 0
+  androidKeystoreName:
+  androidKeyaliasName:
+  androidKeystorePass:
+  androidKeyaliasPass:
+  androidTargetSdkVersion: 0
+  androidMinSdkVersion: 22
+  androidMaxSdkVersion: 0
+  androidPreferredInstallLocation: 0
+  androidEnableBanner: 0
+  androidEnableLowAccuracyLocation: 0
+  androidStartInFullscreen: 1
+  androidRenderOutsideSafeArea: 1
+  androidUseSwappy: 0
+  androidBlitType: 0
+  androidShowActivityIndicatorOnLoading: -1
+  androidEnableNewInputSystem: 0
+  androidEnableMultithreadedRendering: 1
+  androidTargetArchitectures: 2
+  androidBundleVersionCode: 1
+  androidVersionCode: 1
+  androidVersionName: 1.0.0
+  bundleIdentifier: com.tjearn.app
+  bundleVersion: 1.0.0
+  preloadedAssets: []
+  metroInputSource: 0
+  m_ActiveColorSpace: 1
+  m_MTRendering: 1
+  mipStripping: 0
+  numberOfMipsStripped: 0
+  numberOfMipsStrippedPerMip: 0
+  m_StackTraceTypes: 0100000001000000010000000100000001000000
+  scriptingBackend: 1
+  il2cppCompilerConfiguration: 1
+  il2cppAdditionalArgs:
+  scriptingDefineSymbols: {}
+  additionalCompilerArguments: []
+  platformArchitecture: 0
+  runInBackground: 0
+  captureSingleScreen: 0
+  muteOtherAudioSources: 0
+  PrepareDataForPlay: 0
+  forceSingleInstance: 0
+  resizableWindow: 0
+  usePlayerLog: 1
+  bakeCollisionMeshes: 0
+  forceSRGBBlit: 0
+  useHDRDisplay: 0
+  m_ActiveInputHandler: 0
+  m_VulkanEnablePreTransform: 0
+  m_VulkanEnableLateAcquireNextImage: 0
+  m_VulkanEnableSetHdr: 0
+  m_GraphicsJobs: 0
+  m_JobWorkerCount: -1
+  gcIncremental: 1
+  gcWBarrierValidation: 0
+  m_AllowUnsafeCode: 0
+  m_UseDeterministicCompilation: 0
+  m_EnableInternalProfiler: 0
+  m_EnableNativePlatformBackendsForNewInputSystem: 1
+  m_EnableNewInputSystem: 0
+  m_MobileMTRendering: 1
+  m_MobileMTRenderingAndroid: 1
+  m_VirtualTexturingSupportEnabled: 0
+  m_SpriteBatchVertexThreshold: 1500
+  m_ScriptingRuntimeVersion: 4
+  m_ApiCompatibilityLevel: 6
+  m_DisplayResolutionDialog: 0
+  m_SupportedAspectRatios:
+    "16:10": 1
+    "4:3": 1
+    "16:9": 1
+    "5:4": 1
+    "3:2": 1
+    "Native": 1
+    "Other": 1
+  m_DefaultIsFullScreen: 1
+  m_DefaultIsNativeResolution: 1
+  m_RunInBackground: 0
+  m_CaptureSingleScreen: 0
+  m_MuteOtherAudioSources: 0
+  m_UseFlipModelSwapchain: 1
+  m_StereoRenderingPath: 0
+  m_StereoRenderingPathAndroid: 0
+  m_VRSettings: []
+  m_CloudProjectId:
+  m_ProjectName: TJ Racing 3D
+  m_OrganizationId:
+  m_CloudEnabled: 0
+  m_EnableEditorAnalytics: 0
+  m_EnableCrashReport: 0
+  m_UnityAnalyticsEnabled: 0
+  m_UnityAdsEnabled: 1
+  m_PerformanceReportingEnabled: 0
+  m_StackTraceTypes: 0100000001000000010000000100000001000000
