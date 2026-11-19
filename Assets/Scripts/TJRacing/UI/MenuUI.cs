@@ -174,13 +174,14 @@ namespace TJRacing
             _splashGroup = _splashPanel.AddComponent<CanvasGroup>();
 
             // Full-screen poster (the user's own racing portrait, exactly as
-            // sent — shown WHOLE, cover-fit). AspectRatioFitter in Envelope
-            // mode = cover: the image fills the screen, preserving its
-            // aspect, cropping the overflow (the poster is 2:3, the phone
-            // is 9:16, so a sliver is cropped left and right — the face,
-            // title and START button all stay visible). If the texture is
-            // missing, the splash is title-only: no crash, no hang, the
-            // menu is still reachable.
+            // sent — shown WHOLE, contain-fit, NOTHING cut off).
+            // AspectRatioFitter in FitInParent mode = contain: the whole
+            // image is visible, preserving its aspect, centred on the dark
+            // background with dark bars top and bottom (the poster is 2:3,
+            // the phone is 9:16, so it letterboxes — the full "Race • Drive
+            // • Win" ribbon and every side button stay visible). If the
+            // texture is missing, the splash is title-only: no crash, no
+            // hang, the menu is still reachable.
             var photo = Resources.Load<Texture2D>(SplashPhotoPath);
             if (photo != null)
             {
@@ -192,7 +193,7 @@ namespace TJRacing
                 raw.texture = photo;
                 raw.raycastTarget = false;
                 var fitter = rawGo.AddComponent<AspectRatioFitter>();
-                fitter.aspectMode = AspectRatioFitter.AspectMode.Envelope;
+                fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
                 fitter.aspectRatio = photo.width / (float)photo.height;
             }
             else
