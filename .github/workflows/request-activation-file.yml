@@ -1,0 +1,41 @@
+# TJ Racing 3D — request a Unity activation file (.alf), one-time setup step
+#
+# Trigger: Actions tab -> "Request Unity activation file" -> Run workflow.
+# No secrets needed — this only generates the .alf file.
+#
+# Output: artifact "activation-file" (14-day retention) containing the .alf.
+# Next step (main agent, via browser): upload the .alf at
+# https://license.unity3d.com/manual while signed in to the Unity account,
+# download the .ulf licence file, and add it as the UNITY_LICENSE repo secret
+# (along with UNITY_EMAIL + UNITY_PASSWORD) — then the Export workflow can run.
+
+name: Request Unity activation file
+
+on:
+  workflow_dispatch:
+    inputs:
+      unity_version:
+        description: "Unity version (must stay 2022.3.62f2)"
+        required: true
+        default: "2022.3.62f2"
+
+jobs:
+  request:
+    name: Request activation file (.alf)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Request activation file
+        id: activation
+        uses: game-ci/unity-request-activation-file@v4
+        with:
+          unityVersion: ${{ inputs.unity_version }}
+
+      - name: Upload activation file artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: activation-file
+          path: ${{ steps.activation.outputs.filePath }}
+          retention-days: 14
