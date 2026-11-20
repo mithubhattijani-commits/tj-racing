@@ -10,6 +10,7 @@
 //   - Grid: player starts LAST (row 3) — the win is earned, not given.
 //   - Traffic: lap 2 bridge, lap 3 hard-level road (TrafficManager).
 //   - Camera, HUD, results, ads, audio, tilt all wired here.
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -46,7 +47,12 @@ namespace TJRacing
         private AsyncOperation _raceActivatingOp;
         private float _raceLoadStartTime;
         private bool _raceLoadFailed;
-        private const float RaceLoadStallSecs = 30f;
+        // Guards the race-scene setup coroutine against a double start
+        // (sceneLoaded + Start() fallback firing for the same scene).
+        private bool _raceSetupRunning;
+        // v1.0.33: 8 s, not 30 — a user staring at 1% must get a
+        // retry path (START → sync load) in seconds, not half a minute.
+        private const float RaceLoadStallSecs = 8f;
 
         void Awake()
         {
@@ -80,6 +86,22 @@ namespace TJRacing
                 FlutterBridge.Instance.OnStartRaceRequested -= ActivateRaceScene;
                 FlutterBridge.Instance.OnQuitToMenuRequested -= LoadMenuScene;
             }
+        }
+
+        /// <summary>
+        /// Fallback for the case where the bootstrap awakes into a scene
+        /// that is ALREADY loaded, so SceneManager.sceneLoaded never fires
+        /// for it (Editor playmode with scene reload disabled; any future
+        /// flow that adds the bootstrap to a live scene). On a phone the
+        /// normal flow fires sceneLoaded before Start, so the setup runs
+        /// via the event and this is a no-op (both setup methods guard
+        /// against a double run).
+        /// </summary>
+        void Start()
+        {
+            var active = SceneManager.GetActiveScene();
+            if (active.name == MenuScene) SetupMenuScene();
+            else if (active.name == RaceScene) StartCoroutine(SetupRaceSceneAsync());
         }
 
         /// <summary>
@@ -139,6 +161,16 @@ namespace TJRacing
         public bool IsRaceLoading => _raceLoadOp != null && !IsRaceReady
             && (Time.unscaledTime - _raceLoadStartTime) <= RaceLoadStallSecs;
 
+        /// <summary>Preload running but past the stall window without reaching 90%.</summary>
+        public bool IsRaceLoadStalled => _raceLoadOp != null && !IsRaceReady
+            && (Time.unscaledTime - _raceLoadStartTime) > RaceLoadStallSecs;
+
+        /// <summary>A preload failed (or activation found nothing to activate).</summary>
+        public bool HasRaceLoadFailed => _raceLoadFailed;
+
+        /// <summary>True while a preload operation exists (running or ready).</summary>
+        public bool IsPreloadRunning => _raceLoadOp != null;
+
         /// <summary>
         /// Activates the preloaded race scene; falls back to a
         /// synchronous load if nothing was preloaded (or it stalled)
@@ -177,11 +209,15 @@ namespace TJRacing
             _raceActivatingOp = null;
             CleanupSpawnedCars();
             if (scene.name == MenuScene) SetupMenuScene();
-            else if (scene.name == RaceScene) SetupRaceScene();
+            else if (scene.name == RaceScene) StartCoroutine(SetupRaceSceneAsync());
         }
 
         private void SetupMenuScene()
         {
+            // Idempotency: Start() runs after sceneLoaded in the normal
+            // flow, so the menu may already be set up — skip the rebuild
+            // (and, critically, do NOT reset a preload that is running).
+            if (GameObject.Find("MenuUI") != null) return;
             // Fresh preload state per menu visit (a stalled/failed
             // preload from the last visit must not poison this one);
             // MenuUI.Start restarts the preload one frame later.
@@ -195,6 +231,15 @@ namespace TJRacing
                 mainCamera.transform.LookAt(new Vector3(0f, 1f, 0f));
                 mainCamera.clearFlags = CameraClearFlags.SolidColor;
                 mainCamera.backgroundColor = new Color(0.05f, 0.05f, 0.16f);
+                // AudioListener: the menu scene has none of its own, so
+                // WITHOUT this the background music + UI clicks are
+                // SILENT in the menu (Unity only plays audio through an
+                // active listener) and the log fills with "no audio
+                // listeners" warnings every frame. The race scene adds
+                // its own listener to the race camera; this one is
+                // destroyed with the menu scene, so the two never coexist.
+                if (mainCamera.GetComponent<AudioListener>() == null)
+                    mainCamera.gameObject.AddComponent<AudioListener>();
             }
             var menuGo = new GameObject("MenuUI");
             menuGo.AddComponent<MenuUI>();
@@ -213,10 +258,32 @@ namespace TJRacing
             }
         }
 
-        private void SetupRaceScene()
+        /// <summary>
+        /// Builds the race scene in phases with a visible "BUILDING
+        /// RACE…" overlay and a frame yield between phases. The track
+        /// (heightmap meshes, ~1500 objects), 6 cars, AI and HUD are
+        /// built synchronously; on a slow phone each phase blocks the
+        /// main thread for ~0.5-2 s, which looks like a freeze right
+        /// after START if nothing renders. The overlay + yields make
+        /// the wait visible progress instead. Aborts cleanly if the
+        /// player quits to the menu mid-build (the coroutine lives on
+        /// the DontDestroyOnLoad bootstrap, so it must not keep
+        /// building a race in the menu scene).
+        /// </summary>
+        private IEnumerator SetupRaceSceneAsync()
         {
+            // Re-entrancy guard (sceneLoaded + Start() fallback).
+            if (_raceSetupRunning) yield break;
+            _raceSetupRunning = true;
             var cfg = FlutterBridge.Instance != null ? FlutterBridge.Instance.Config : RacingConfig.Defaults();
             int level = FlutterBridge.Instance != null ? FlutterBridge.Instance.Level : 1;
+
+            var overlayCanvas = UIBuilder.MakeCanvas(gameObject, "BuildOverlayCanvas");
+            var overlayBg = UIBuilder.MakePanel(overlayCanvas.transform, "Bg",
+                Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, new Color(0.03f, 0.03f, 0.13f, 1f));
+            var overlayText = UIBuilder.Label(overlayBg, "Text", "BUILDING RACE…", 56, Color.white, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UIBuilder.Place(overlayText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-520, -60), new Vector2(520, 60));
+            yield return null; // let the overlay draw once before the heavy build
 
             // Night sky + fog (flat ambient: no skybox asset in this text-only project).
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
@@ -227,10 +294,14 @@ namespace TJRacing
             if (mainCamera == null) mainCamera = Camera.main;
 
             // Track.
+            overlayText.text = "Building track…";
             var trackGo = new GameObject("Track");
             _trackBuilder = trackGo.AddComponent<TrackBuilder>();
+            yield return null;
+            if (SceneManager.GetActiveScene().name != RaceScene) { Destroy(overlayCanvas.gameObject); _raceSetupRunning = false; yield break; }
 
             // Race managers.
+            overlayText.text = "Placing cars…";
             var raceGo = new GameObject("RaceManager");
             _raceManager = raceGo.AddComponent<RaceManager>();
             var posGo = new GameObject("RacePositionTracker");
@@ -279,8 +350,11 @@ namespace TJRacing
                 _positionTracker.Register(aiTracker);
                 _spawnedCars.Add(ai.root);
             }
+            yield return null;
+            if (SceneManager.GetActiveScene().name != RaceScene) { Destroy(overlayCanvas.gameObject); _raceSetupRunning = false; yield break; }
 
             // Chase camera.
+            overlayText.text = "Starting race…";
             var camGo = mainCamera != null ? mainCamera.gameObject : new GameObject("Main Camera");
             var raceCam = camGo.GetComponent<RaceCamera>() ?? camGo.AddComponent<RaceCamera>();
             raceCam.target = player.root.transform;
@@ -296,7 +370,9 @@ namespace TJRacing
             // Banner stays visible (passive top strip).
             UnityAdsManager.Instance?.ShowBanner();
 
-            // GO.
+            // Build done — overlay off, GO.
+            Destroy(overlayCanvas.gameObject);
+            _raceSetupRunning = false;
             _raceManager.StartRace(cfg.race.laps, _isFirstRace);
             _isFirstRace = false;
         }

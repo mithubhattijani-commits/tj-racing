@@ -45,6 +45,7 @@ namespace TJRacing
         private Text _carPriceText;
         private Text _raceSubText;
         private Text _sensitivityValueText;
+        private Text _muteButtonText;
         private GameObject _settingsPanel;
         private GameObject _howToPanel;
         private int _selectedIndex;
@@ -69,10 +70,12 @@ namespace TJRacing
         private static bool _splashShown;
 
         // Loading bar on the splash (v1.0.32): REAL race-scene preload
-        // progress 1-100% — never a fake timer. START only works at 100%.
+        // progress 1-100% — never a fake timer. START works at 100% AND
+        // when the preload is stalled/failed (sync-load retry, v1.0.33).
         private Image _splashLoadFill;
         private Text _splashLoadText;
         private bool _raceSubLoadingShown;
+        private int _lastSentLoadPct = -1; // last % sent to Flutter (menu_ready progress)
         private const float SplashHoldSecs = 2.5f;
         private const float SplashFadeSecs = 0.5f;
         private const float SplashFailsafeSecs = 10f;
@@ -118,6 +121,11 @@ namespace TJRacing
             // operation; MenuUI only reads it). Started here, one frame
             // after Awake, outside the sceneLoaded callback.
             TJRacingBootstrap.Instance?.PreloadRaceScene();
+            // Tell Flutter the menu is up and Unity's Update loop is
+            // running (v1.0.33 heartbeat): the host uses it to know the
+            // game is alive and to stop its freeze-recovery attempts.
+            // Sent AFTER the splash is built and the preload started.
+            FlutterBridge.Instance?.SendMenuReady();
         }
 
         void Update()
@@ -153,19 +161,39 @@ namespace TJRacing
                 var boot = TJRacingBootstrap.Instance;
                 float loadP = boot != null ? boot.RaceLoadProgress01 : 0f;
                 bool loadReady = boot != null && boot.IsRaceReady;
+                // Stalled/failed preload (8 s without reaching 90%): the
+                // bar must say so and START must RETRY via the sync load
+                // instead of sitting dead at 1% — a stuck preload can
+                // never trap the user (v1.0.32: 30 s stall + dead START).
+                bool loadStalled = boot != null && boot.IsRaceLoadStalled;
+                bool loadFailed = boot != null && boot.HasRaceLoadFailed;
+                if (boot != null && !boot.IsPreloadRunning && !loadFailed && _splashTimer > 1f)
+                    boot.PreloadRaceScene(); // preload never started: (re)start it
                 int loadPct = loadReady ? 100 : Mathf.Max(1, Mathf.FloorToInt(loadP * 100f));
                 if (_splashLoadFill != null) _splashLoadFill.fillAmount = loadP;
                 if (_splashLoadText != null)
-                    _splashLoadText.text = loadReady ? "READY — TAP START" : "LOADING " + loadPct + "%";
+                    _splashLoadText.text = loadReady ? "READY — TAP START"
+                        : (loadStalled || loadFailed) ? "TAP START TO RETRY"
+                        : "LOADING " + loadPct + "%";
+                // Tell Flutter the % (only when it changes) so the host
+                // can see Unity is alive even if the surface is frozen.
+                if (loadPct != _lastSentLoadPct)
+                {
+                    _lastSentLoadPct = loadPct;
+                    FlutterBridge.Instance?.SendLoadingProgress(loadPct);
+                }
 
                 if (_splashTimer >= SplashInputGraceSecs && SplashTapDown(out Vector2 tapPos))
                 {
                     if (_splashStartBtnRt != null &&
                         RectTransformUtility.RectangleContainsScreenPoint(_splashStartBtnRt, tapPos))
                     {
-                        // START only works once loading is at 100% — before
-                        // that the tap does nothing (the bar shows the %).
-                        if (loadReady) OnRacePressed();
+                        // START works at 100% AND when the preload is
+                        // stalled/failed (OnRacePressed falls back to the
+                        // synchronous load) — it is never a dead button.
+                        // While genuinely still loading, the tap does
+                        // nothing (the bar shows the %).
+                        if (loadReady || loadStalled || loadFailed) OnRacePressed();
                     }
                     else
                     {
@@ -364,6 +392,10 @@ namespace TJRacing
             UIBuilder.Place(loadFillRt, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             _splashLoadFill = loadFillGo.AddComponent<Image>();
             _splashLoadFill.color = UIBuilder.Green;
+            // Filled type is REQUIRED: a Simple-type Image ignores
+            // fillAmount and renders full green from frame 1 (v1.0.32
+            // showed a full bar next to "LOADING 1%").
+            _splashLoadFill.type = Image.Type.Filled;
             _splashLoadFill.fillMethod = Image.FillMethod.Horizontal;
             _splashLoadFill.fillOrigin = (int)Image.OriginHorizontal.Left;
             _splashLoadFill.fillAmount = 0f;
@@ -419,7 +451,13 @@ namespace TJRacing
             {
                 bool muted = !(AudioManager.Instance != null && AudioManager.Instance.Muted);
                 AudioManager.Instance?.SetMuted(muted);
+                if (_muteButtonText != null) _muteButtonText.text = muted ? "SOUND: OFF" : "SOUND: ON";
             });
+            // The label must show the REAL state (v1.0.32 hardcoded
+            // "SOUND: ON" and never updated it).
+            _muteButtonText = muteBtn.GetComponentInChildren<Text>();
+            if (_muteButtonText != null && AudioManager.Instance != null && AudioManager.Instance.Muted)
+                _muteButtonText.text = "SOUND: OFF";
             UIBuilder.Place(muteBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.3f), new Vector2(0.5f, 0.3f), new Vector2(-350, -45), new Vector2(350, 45));
             var closeBtn = UIBuilder.MakeButton(_settingsPanel.transform, "CloseBtn", "CLOSE", 44, UIBuilder.Green, () => _settingsPanel.SetActive(false));
             UIBuilder.Place(closeBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.15f), new Vector2(0.5f, 0.15f), new Vector2(-300, -50), new Vector2(300, 50));

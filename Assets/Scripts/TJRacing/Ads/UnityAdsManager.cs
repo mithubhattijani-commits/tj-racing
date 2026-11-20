@@ -252,7 +252,12 @@ namespace TJRacing
                 }
                 else
                 {
+                    // Skipped / unknown: answer instead of dropping
+                    // silently — Flutter's 30 s reward timeout would
+                    // otherwise be the only feedback.
+                    string req = _pendingRewardedRequestId;
                     _pendingRewardedRequestId = "";
+                    SendRewardedFailed(req, "skipped");
                 }
             }
         }

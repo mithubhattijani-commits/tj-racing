@@ -234,8 +234,8 @@ namespace TJRacing
         private void OnCountdown(float v)
         {
             _countdownText.text = v <= 0f ? "GO!" : Mathf.RoundToInt(v).ToString();
-            if (v <= 0f) Invoke(nameof(ClearCountdown), 0.8f);
-            AudioManager.Instance?.PlayCountdown();
+            if (v <= 0f) { Invoke(nameof(ClearCountdown), 0.8f); AudioManager.Instance?.PlayGo(); }
+            else AudioManager.Instance?.PlayCountdown();
         }
 
         private void ClearCountdown() { _countdownText.text = ""; }

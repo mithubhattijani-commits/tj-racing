@@ -24,7 +24,7 @@
 // Outgoing messages (Unity -> Flutter) are JSON with a "type" field:
 //   race_result, race_started, rewarded_completed, rewarded_failed,
 //   interstitial_shown, race_cancelled, car_locked_tapped,
-//   powerup_purchase_requested
+//   powerup_purchase_requested, menu_ready, loading_progress
 //
 // Unity NEVER credits any coin. Rewarded completion is only an EVENT; Flutter credits
 // Ad Coins server-side after verifying it.
@@ -68,6 +68,12 @@ namespace TJRacing
         /// </summary>
         public List<string> PendingPowerups { get; private set; } = new List<string>();
 
+        // SetConfig carries the config default sensitivity (1.0) on
+        // every re-send (Flutter's 0.5s/2s/5s stagger). Once the player
+        // has set a sensitivity (slider or SetSensitivity message),
+        // a later SetConfig must NOT clobber it back to the default.
+        private bool _sensitivityFromFlutter;
+
         void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -81,6 +87,21 @@ namespace TJRacing
         {
             try { global::SendToFlutter.Send(json); }
             catch (Exception e) { Debug.LogWarning("[TJ Racing] SendToFlutter failed: " + e.Message); }
+        }
+
+        /// <summary>Menu is built and Unity's Update loop is running
+        /// (v1.0.33 heartbeat). Flutter uses it to know the game is
+        /// alive and to stop its freeze-recovery attempts; it also
+        /// re-sends the config trio on arrival (Unity is definitely
+        /// listening then).</summary>
+        public void SendMenuReady() { SendEvent("menu_ready", "", "", "{}"); }
+
+        /// <summary>Race-scene preload progress 0-100 (v1.0.33). Sent
+        /// only when the % changes, so Flutter can see Unity is alive
+        /// even if the platform surface is frozen on frame 1.</summary>
+        public void SendLoadingProgress(int pct)
+        {
+            SendEvent("loading_progress", "", "", "{\"pct\":" + Mathf.Clamp(pct, 0, 100) + "}");
         }
 
         public void SendRaceResult(RaceResult result) { SendJson(result.ToJson()); }
@@ -99,6 +120,7 @@ namespace TJRacing
         public void ApplySensitivity(float value)
         {
             TiltSensitivity = Mathf.Clamp(value, 0.5f, 2.0f);
+            _sensitivityFromFlutter = true;
             OnSensitivityChanged?.Invoke(TiltSensitivity);
         }
 
@@ -189,7 +211,11 @@ namespace TJRacing
                         AdCoins = p.adCoins;
                         RsValue = p.rsValue ?? "";
                         TotalEarnedRs = p.totalEarnedRs ?? "";
-                        TiltSensitivity = Config.tiltSensitivity;
+                        // Only take the config default sensitivity when
+                        // the player has not set one (see
+                        // _sensitivityFromFlutter): the stagger re-sends
+                        // would otherwise reset the slider to 1.0.
+                        if (!_sensitivityFromFlutter) TiltSensitivity = Config.tiltSensitivity;
                         OnConfigApplied?.Invoke(Config);
                         OnBalancesChanged?.Invoke();
                     }
@@ -276,7 +302,9 @@ namespace TJRacing
                     var p = JsonUtility.FromJson<PowerupPayload>(payloadJson ?? "{}");
                     if (p != null && !string.IsNullOrEmpty(p.powerupId))
                     {
-                        PendingPowerups.Add(p.powerupId);
+                        // Dedup: a retried Flutter message (or a double
+                        // tap) must not queue the same grant twice.
+                        if (!PendingPowerups.Contains(p.powerupId)) PendingPowerups.Add(p.powerupId);
                         OnPowerupGranted?.Invoke(p.powerupId);
                     }
                     break;
