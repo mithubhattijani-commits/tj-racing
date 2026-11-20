@@ -9,10 +9,19 @@
 // displays the state Flutter sends via SetUnlockedCars / SetBalances.
 // SPLASH (user order 19 Nov, corrected same day — "Jo bheji ha Wohi lagani
 // thi / Portrait"): when the game opens, a full-screen splash shows the
-// user's own racing portrait WHOLE (Assets/Resources/jaani-photo.jpg,
-// cover-fit) — the poster exactly as sent, NOT a cropped face in a circle.
-// Once per session, ~2.5s with a fade, tap anywhere to skip. Title-only
-// if the poster is missing — never a crash.
+// user's own racing poster WHOLE (Assets/Resources/jaani-photo.jpg,
+// contain-fit) — the poster exactly as sent, NOT a cropped face in a circle.
+// v1.0.32 (20 Nov): the poster is now the LANDSCAPE 1600x900 image (the
+// game runs landscape) and its painted yellow START button is a REAL
+// button: tapping it starts the race immediately (same OnRacePressed as
+// the menu RACE button). Any other tap dismisses to the menu. The timer
+// runs on UNSCALED time with a 10 s failsafe, and taps are read as raw
+// input in Update — the 19 Nov build's splash could stick forever if
+// Unity's UI froze (flutter_embed_unity's own UnityPlayerSingleton
+// documents the VISIBLE→GONE→VISIBLE freeze; the play screen rebuilds
+// right after mount, which is exactly that trigger — Flutter now also
+// pause+resumes Unity after the rebuild). Title-only if the poster is
+// missing — never a crash.
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -38,18 +47,31 @@ namespace TJRacing
         private float _heroAngle;
 
         // Splash (once per session, when the game opens): the user's whole
-        // racing poster, full-screen, cover-fit. Auto-dismisses after
-        // SplashHoldSecs with a fade; tap anywhere skips immediately.
-        // Title-only if the poster is missing — the splash never blocks
-        // the menu and never crashes.
+        // racing poster, full-screen, contain-fit. Auto-dismisses after
+        // SplashHoldSecs with a fade; tapping the poster's START button
+        // starts the race, any other tap dismisses to the menu. Runs on
+        // UNSCALED time with a 10 s failsafe, so nothing can stick it on
+        // screen. Title-only if the poster is missing — the splash never
+        // blocks the menu and never crashes.
         private GameObject _splashPanel;
         private CanvasGroup _splashGroup;
+        private RectTransform _splashStartBtnRt;
         private float _splashTimer;
         private bool _splashFading;
         private static bool _splashShown;
         private const float SplashHoldSecs = 2.5f;
         private const float SplashFadeSecs = 0.5f;
+        private const float SplashFailsafeSecs = 10f;
+        private const float SplashInputGraceSecs = 0.25f;
         private const string SplashPhotoPath = "jaani-photo";
+
+        // START button on the landscape poster (measured from the
+        // 1600x900 image, fractions of the poster): yellow START
+        // bottom-right, x 0.656-0.989, y-from-top 0.711-0.931.
+        // Unity anchors are bottom-up, so y 0.069-0.289; inset
+        // slightly to stay on the solid yellow body.
+        private static readonly Vector2 SplashStartAnchorMin = new Vector2(0.67f, 0.08f);
+        private static readonly Vector2 SplashStartAnchorMax = new Vector2(0.98f, 0.28f);
 
         void Awake()
         {
@@ -88,20 +110,63 @@ namespace TJRacing
                 _heroCar.transform.rotation = Quaternion.Euler(0f, Mathf.Sin(_heroAngle) * 24f, 0f);
             }
 
-            // Splash: hold, then fade out. Tap dismisses instantly (DismissSplash).
+            // Splash: hold, then fade out. Runs on UNSCALED time so a
+            // paused timeScale can never stick the splash on screen, and
+            // after SplashFailsafeSecs it is force-dismissed no matter
+            // what. Taps are raw input here (not Button-only): a tap on
+            // the poster's START button starts the race immediately
+            // (same path as the menu RACE button); any other tap
+            // dismisses to the menu. A Button-only dismiss dies
+            // silently if the EventSystem/raycast ever breaks — raw
+            // input has no such failure mode.
             if (_splashPanel != null && _splashPanel.activeSelf)
             {
-                _splashTimer += Time.deltaTime;
+                _splashTimer += Time.unscaledDeltaTime;
+                if (_splashTimer >= SplashFailsafeSecs)
+                {
+                    DismissSplash();
+                    return;
+                }
+                if (_splashTimer >= SplashInputGraceSecs && SplashTapDown(out Vector2 tapPos))
+                {
+                    if (_splashStartBtnRt != null &&
+                        RectTransformUtility.RectangleContainsScreenPoint(_splashStartBtnRt, tapPos))
+                    {
+                        OnRacePressed();
+                    }
+                    else
+                    {
+                        DismissSplash();
+                    }
+                    return;
+                }
                 if (!_splashFading && _splashTimer >= SplashHoldSecs)
                 {
                     _splashFading = true;
                 }
                 if (_splashFading)
                 {
-                    _splashGroup.alpha -= Time.deltaTime / SplashFadeSecs;
+                    _splashGroup.alpha -= Time.unscaledDeltaTime / SplashFadeSecs;
                     if (_splashGroup.alpha <= 0f) DismissSplash();
                 }
             }
+        }
+
+        // True on the frame a touch/click begins; tapPos is screen space.
+        private static bool SplashTapDown(out Vector2 tapPos)
+        {
+            if (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began)
+            {
+                tapPos = Input.GetTouch(0).position;
+                return true;
+            }
+            if (Input.GetMouseButtonDown(0))
+            {
+                tapPos = Input.mousePosition;
+                return true;
+            }
+            tapPos = Vector2.zero;
+            return false;
         }
 
         private void BuildUI()
@@ -173,15 +238,15 @@ namespace TJRacing
             _splashPanel.AddComponent<Image>().color = new Color(0.03f, 0.03f, 0.13f, 1f);
             _splashGroup = _splashPanel.AddComponent<CanvasGroup>();
 
-            // Full-screen poster (the user's own racing portrait, exactly as
+            // Full-screen poster (the user's own racing poster, exactly as
             // sent — shown WHOLE, contain-fit, NOTHING cut off).
             // AspectRatioFitter in FitInParent mode = contain: the whole
             // image is visible, preserving its aspect, centred on the dark
-            // background with dark bars top and bottom (the poster is 2:3,
-            // the phone is 9:16, so it letterboxes — the full "Race • Drive
-            // • Win" ribbon and every side button stay visible). If the
-            // texture is missing, the splash is title-only: no crash, no
-            // hang, the menu is still reachable.
+            // background. The poster is 16:9 landscape and the game runs
+            // landscape, so it fills the view near full-bleed (thin bars
+            // only if the phone's aspect differs). If the texture is
+            // missing, the splash is title-only: no crash, no hang, the
+            // menu is still reachable.
             var photo = Resources.Load<Texture2D>(SplashPhotoPath);
             if (photo != null)
             {
@@ -195,6 +260,28 @@ namespace TJRacing
                 var fitter = rawGo.AddComponent<AspectRatioFitter>();
                 fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
                 fitter.aspectRatio = photo.width / (float)photo.height;
+
+                // REAL START button over the poster's own yellow START
+                // (bottom-right). Child of the poster, so it tracks the
+                // contain-fit rect exactly on any screen size: the tap
+                // zone is always exactly on the painted button. It calls
+                // the same OnRacePressed as the menu RACE button (locked
+                // car -> Flutter unlock prompt, else load the race scene).
+                // The other painted buttons (Daily Rewards / Achievements
+                // / Leaderboard / Shop) are NOT built — image only.
+                var startGo = new GameObject("SplashStartButton");
+                startGo.transform.SetParent(rawGo.transform, false);
+                var startRt = startGo.AddComponent<RectTransform>();
+                startRt.anchorMin = SplashStartAnchorMin;
+                startRt.anchorMax = SplashStartAnchorMax;
+                startRt.offsetMin = Vector2.zero;
+                startRt.offsetMax = Vector2.zero;
+                var startImg = startGo.AddComponent<Image>();
+                startImg.color = new Color(0f, 0f, 0f, 0f);
+                var startBtn = startGo.AddComponent<Button>();
+                startBtn.targetGraphic = startImg;
+                startBtn.onClick.AddListener(OnRacePressed);
+                _splashStartBtnRt = startRt;
             }
             else
             {
@@ -209,16 +296,14 @@ namespace TJRacing
                 UIBuilder.Place(sub.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-520, -190), new Vector2(520, -120));
             }
 
-            // Invisible full-screen tap catcher, topmost: any tap skips at once.
-            var tapGo = new GameObject("TapToSkip");
-            tapGo.transform.SetParent(_splashPanel.transform, false);
-            var tapRt = tapGo.AddComponent<RectTransform>();
-            UIBuilder.Place(tapRt, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            var tapImg = tapGo.AddComponent<Image>();
-            tapImg.color = new Color(0f, 0f, 0f, 0f);
-            var tapBtn = tapGo.AddComponent<Button>();
-            tapBtn.targetGraphic = tapImg;
-            tapBtn.onClick.AddListener(DismissSplash);
+            // No full-screen TapToSkip Button: ALL splash taps are handled
+            // in Update() via raw input (press frame), hit-tested against
+            // the START button rect — START starts the race, anywhere
+            // else dismisses to the menu. A Button-only dismiss was the
+            // old path: it dies silently if the EventSystem/raycast ever
+            // breaks, and a full-screen catcher would sit on top of the
+            // START button and swallow its taps. Raw input has neither
+            // failure mode; the START Button above is a second path.
 
             _splashTimer = 0f;
             _splashFading = false;
