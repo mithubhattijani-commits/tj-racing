@@ -46,6 +46,8 @@ namespace TJRacing
         private Rigidbody _rb;
         private float _steerSmooth;
         private bool _offTrackSlowdown;
+        private bool _wasNitroActive;
+        private float _lastCrashSoundTime = -10f;
 
         void Awake()
         {
@@ -114,6 +116,21 @@ namespace TJRacing
             IsDrifting = SpeedKmh > 60f && lateralSlip > 4.5f && Mathf.Abs(SteerInput) > 0.35f;
             if (IsDrifting && Nitro != null) Nitro.AddCharge(lateralSlip * Time.fixedDeltaTime * 2.2f);
 
+            // --- Sounds (player car only): brake screech while braking
+            // at speed, skid loop while drifting, nitro whoosh the
+            // moment the meter starts burning.
+            if (IsPlayer)
+            {
+                var audio = AudioManager.Instance;
+                if (audio != null)
+                {
+                    if (BrakeInput > 0.01f && SpeedKmh > 30f) audio.StartBrake(); else audio.StopBrake();
+                    if (IsDrifting) audio.StartSkid(); else audio.StopSkid();
+                    if (nitroActive && !_wasNitroActive) audio.PlayNitro();
+                    _wasNitroActive = nitroActive;
+                }
+            }
+
             // --- Wheel visuals ---
             UpdateWheelVisual(wheelFL, wheelMeshFL);
             UpdateWheelVisual(wheelFR, wheelMeshFR);
@@ -131,6 +148,17 @@ namespace TJRacing
 
         // Called by TrackBuilder's off-road trigger volumes.
         public void SetOffTrack(bool offTrack) { _offTrackSlowdown = offTrack; }
+
+        // Crash sound (player only, throttled): a real impact, not a
+        // brush — traffic, barriers and AI cars all report here.
+        void OnCollisionEnter(Collision collision)
+        {
+            if (!IsPlayer) return;
+            if (collision.relativeVelocity.magnitude < 3f) return;
+            if (Time.time - _lastCrashSoundTime < 0.5f) return;
+            _lastCrashSoundTime = Time.time;
+            AudioManager.Instance?.PlayCrash();
+        }
 
         public void ResetTo(Vector3 pos, Quaternion rot)
         {

@@ -55,6 +55,7 @@ namespace TJRacing
                 ? "+" + result.level_coins_earned + " Level Coins"
                 : "No coins this time — win or finish 2nd to earn coins";
             if (result.position == 1) AudioManager.Instance?.PlayWin();
+            else AudioManager.Instance?.PlayLose();
             UnityAdsManager.Instance?.NotifyRaceFinished(result.position == 1);
             _canvas.gameObject.SetActive(true);
         }

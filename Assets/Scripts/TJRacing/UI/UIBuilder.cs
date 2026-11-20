@@ -20,6 +20,23 @@ namespace TJRacing
         public static readonly Color Panel = new Color(0f, 0f, 0f, 0.8f);
         public static readonly Color PanelSoft = new Color(0f, 0f, 0f, 0.55f);
 
+        // Default font: Arial.ttf was removed as a built-in resource in
+        // Unity 2022.3 — Resources.GetBuiltinResource<Font>("Arial.ttf")
+        // throws ArgumentException in the Editor (and aborts whatever
+        // UI was being built). The built-in font is now
+        // "LegacyRuntime.ttf" (the name the Arial error itself names);
+        // cached once.
+        private static Font _defaultFont;
+        public static Font DefaultFont
+        {
+            get
+            {
+                if (_defaultFont == null)
+                    _defaultFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                return _defaultFont;
+            }
+        }
+
         public static Canvas MakeCanvas(GameObject parent, string name)
         {
             var go = new GameObject(name);
@@ -59,7 +76,7 @@ namespace TJRacing
             rt.SetParent(parent, false);
             var t = go.AddComponent<Text>();
             t.text = text;
-            t.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            t.font = DefaultFont;
             t.fontSize = fontSize;
             t.color = color;
             t.alignment = align;
@@ -82,7 +99,13 @@ namespace TJRacing
             var colors = btn.colors;
             colors.pressedColor = bg * 0.75f;
             btn.colors = colors;
-            if (onClick != null) btn.onClick.AddListener(onClick);
+            if (onClick != null) btn.onClick.AddListener(() =>
+            {
+                // Every tap button clicks (menu, results, pause, splash
+                // START). Hold buttons pass null onClick — no click.
+                AudioManager.Instance?.PlayClick();
+                onClick.Invoke();
+            });
             var txt = new GameObject("Label");
             txt.transform.SetParent(go.transform, false);
             var trt = txt.AddComponent<RectTransform>();
@@ -90,7 +113,7 @@ namespace TJRacing
             trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
             var t = txt.AddComponent<Text>();
             t.text = label;
-            t.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            t.font = DefaultFont;
             t.fontSize = fontSize;
             t.color = Color.white;
             t.alignment = TextAnchor.MiddleCenter;
