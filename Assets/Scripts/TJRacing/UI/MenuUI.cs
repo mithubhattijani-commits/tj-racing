@@ -22,6 +22,14 @@
 // right after mount, which is exactly that trigger — Flutter now also
 // pause+resumes Unity after the rebuild). Title-only if the poster is
 // missing — never a crash.
+// LOADING 1-100 (v1.0.32, user order 20 Nov): the splash shows a real
+// loading bar + % driven by the race-scene preload (bootstrap
+// LoadSceneAsync, allowSceneActivation=false) — never a fake timer.
+// START only works at 100%; before that the tap does nothing and the
+// bar shows the %. The menu RACE button is gated the same way (its
+// sub-text shows the % while loading). If no preload is running the
+// race falls back to the old synchronous load — the preload can never
+// block a race.
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -59,6 +67,12 @@ namespace TJRacing
         private float _splashTimer;
         private bool _splashFading;
         private static bool _splashShown;
+
+        // Loading bar on the splash (v1.0.32): REAL race-scene preload
+        // progress 1-100% — never a fake timer. START only works at 100%.
+        private Image _splashLoadFill;
+        private Text _splashLoadText;
+        private bool _raceSubLoadingShown;
         private const float SplashHoldSecs = 2.5f;
         private const float SplashFadeSecs = 0.5f;
         private const float SplashFailsafeSecs = 10f;
@@ -99,6 +113,11 @@ namespace TJRacing
             }
             RefreshCoinsPill();
             UnityAdsManager.Instance?.ShowBanner();
+            // Preload the race scene in the background so the splash can
+            // show real 1-100% loading (the bootstrap owns the
+            // operation; MenuUI only reads it). Started here, one frame
+            // after Awake, outside the sceneLoaded callback.
+            TJRacingBootstrap.Instance?.PreloadRaceScene();
         }
 
         void Update()
@@ -127,12 +146,26 @@ namespace TJRacing
                     DismissSplash();
                     return;
                 }
+
+                // Loading 1-100: REAL race-scene preload progress from the
+                // bootstrap (AsyncOperation caps at 0.9 until activation,
+                // so progress/0.9 maps to 0-100; 100% = ready to start).
+                var boot = TJRacingBootstrap.Instance;
+                float loadP = boot != null ? boot.RaceLoadProgress01 : 0f;
+                bool loadReady = boot != null && boot.IsRaceReady;
+                int loadPct = loadReady ? 100 : Mathf.Max(1, Mathf.FloorToInt(loadP * 100f));
+                if (_splashLoadFill != null) _splashLoadFill.fillAmount = loadP;
+                if (_splashLoadText != null)
+                    _splashLoadText.text = loadReady ? "READY — TAP START" : "LOADING " + loadPct + "%";
+
                 if (_splashTimer >= SplashInputGraceSecs && SplashTapDown(out Vector2 tapPos))
                 {
                     if (_splashStartBtnRt != null &&
                         RectTransformUtility.RectangleContainsScreenPoint(_splashStartBtnRt, tapPos))
                     {
-                        OnRacePressed();
+                        // START only works once loading is at 100% — before
+                        // that the tap does nothing (the bar shows the %).
+                        if (loadReady) OnRacePressed();
                     }
                     else
                     {
@@ -148,6 +181,26 @@ namespace TJRacing
                 {
                     _splashGroup.alpha -= Time.unscaledDeltaTime / SplashFadeSecs;
                     if (_splashGroup.alpha <= 0f) DismissSplash();
+                }
+            }
+
+            // Menu RACE button loading state (splash already gone): while
+            // the preload runs, the sub-text shows the real % so a tap
+            // that does nothing is never a mystery; restored to the
+            // normal line once ready.
+            if (_splashPanel == null && _raceSubText != null)
+            {
+                var boot2 = TJRacingBootstrap.Instance;
+                if (boot2 != null && boot2.IsRaceLoading)
+                {
+                    int pct2 = Mathf.Max(1, Mathf.FloorToInt(boot2.RaceLoadProgress01 * 100f));
+                    _raceSubText.text = "LOADING… " + pct2 + "%";
+                    _raceSubLoadingShown = true;
+                }
+                else if (_raceSubLoadingShown)
+                {
+                    _raceSubLoadingShown = false;
+                    _raceSubText.text = RaceSubLine();
                 }
             }
         }
@@ -296,6 +349,27 @@ namespace TJRacing
                 UIBuilder.Place(sub.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-520, -190), new Vector2(520, -120));
             }
 
+            // Loading bar + % (v1.0.32): bottom-centre pill, below the
+            // painted START button (which sits at y 0.08-0.28), so the
+            // bar never covers it. Driven by the real preload progress
+            // in Update — 1% as soon as the preload starts, 100% when
+            // the race is ready to start. Lives on the splash panel, so
+            // it fades/dismisses with the splash.
+            var loadBg = UIBuilder.MakePanel(_splashPanel.transform, "LoadBarBg",
+                new Vector2(0.25f, 0.015f), new Vector2(0.75f, 0.055f),
+                Vector2.zero, Vector2.zero, new Color(0f, 0f, 0f, 0.65f));
+            var loadFillGo = new GameObject("LoadBarFill");
+            loadFillGo.transform.SetParent(loadBg.transform, false);
+            var loadFillRt = loadFillGo.AddComponent<RectTransform>();
+            UIBuilder.Place(loadFillRt, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            _splashLoadFill = loadFillGo.AddComponent<Image>();
+            _splashLoadFill.color = UIBuilder.Green;
+            _splashLoadFill.fillMethod = Image.FillMethod.Horizontal;
+            _splashLoadFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+            _splashLoadFill.fillAmount = 0f;
+            _splashLoadText = UIBuilder.Label(_splashPanel.transform, "LoadText", "LOADING 1%", 40, Color.white, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UIBuilder.Place(_splashLoadText.rectTransform, new Vector2(0.35f, 0.06f), new Vector2(0.65f, 0.115f), Vector2.zero, Vector2.zero);
+
             // No full-screen TapToSkip Button: ALL splash taps are handled
             // in Update() via raw input (press frame), hit-tested against
             // the START button rect — START starts the race, anywhere
@@ -383,6 +457,13 @@ namespace TJRacing
             FlutterBridge.Instance?.ApplySelectedCar(_cars[_selectedIndex].id);
         }
 
+        private string RaceSubLine()
+        {
+            var cfg = FlutterBridge.Instance != null ? FlutterBridge.Instance.Config : RacingConfig.Defaults();
+            return "Race vs " + cfg.race.ai_opponents + " AI opponents  •  " + cfg.race.laps
+                + " laps  •  Win = +" + cfg.level_coins.win + " coins";
+        }
+
         private void RefreshCarCard()
         {
             if (_cars.Count == 0) return;
@@ -401,9 +482,7 @@ namespace TJRacing
                 int have = FlutterBridge.Instance != null ? FlutterBridge.Instance.AdCoins : 0;
                 _carPriceText.text = have + " / " + car.ad_coins_price + " Ad Coins — unlock in TJ Earn";
             }
-            var cfg = FlutterBridge.Instance != null ? FlutterBridge.Instance.Config : RacingConfig.Defaults();
-            _raceSubText.text = "Race vs " + cfg.race.ai_opponents + " AI opponents  •  " + cfg.race.laps
-                + " laps  •  Win = +" + cfg.level_coins.win + " coins";
+            _raceSubText.text = RaceSubLine();
             SpawnHeroCar(car);
         }
 
@@ -439,7 +518,16 @@ namespace TJRacing
                     "{\"carId\":\"" + car.id + "\",\"price\":" + car.ad_coins_price + "}");
                 return;
             }
-            TJRacingBootstrap.Instance?.LoadRaceScene();
+            // Loading gate (v1.0.32): START/RACE only works once the
+            // race-scene preload is at 100%. While it is still loading
+            // the tap does nothing (the splash bar / menu sub-text shows
+            // the %); if no preload is running (never started, stalled,
+            // failed) fall back to the old synchronous load — the race
+            // can never be blocked by the preload.
+            var boot = TJRacingBootstrap.Instance;
+            if (boot != null && boot.IsRaceReady) { boot.ActivateRaceScene(); return; }
+            if (boot != null && boot.IsRaceLoading) return;
+            boot?.LoadRaceScene();
         }
     }
 }
